@@ -1,4 +1,16 @@
-module Messages exposing (Message, Messages, Msg, addUser, messageTypeToString, prepareMessage, requestMessages, update)
+module Messages exposing
+    ( Message
+    , MessageType(..)
+    , Messages
+    , Msg
+    , addUser
+    , messageTypeToString
+    , prepareMessage
+    , requestMessages
+    , start
+    , update
+    , usersReady
+    )
 
 import Http
 import Json.Decode
@@ -51,9 +63,19 @@ messageTypeToString messageType =
             "USERS_READY"
 
 
+start : Cmd Msg
+start =
+    prepareMessage Start
+
+
 addUser : String -> Cmd Msg
 addUser userName =
     AddUser userName |> prepareMessage
+
+
+usersReady : Cmd Msg
+usersReady =
+    prepareMessage UsersReady
 
 
 requestMessages =
