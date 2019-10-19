@@ -13,16 +13,50 @@ main =
 
 
 type alias Model =
-    { messages : Messages.Messages, screen : Screen, users : List String, userInputVal : String }
+    { messages : Messages.Messages
+    , userInputVal : String
+    , userName : String
+    }
+
+
+type alias User =
+    { name : String
+    }
 
 
 processMessages : Model -> Model
 processMessages model =
-    model
+    procMessages model.messages model
 
 
-processMessage : Model -> Messages.Message -> Model
-processMessage model message =
+procMessages : Messages.Messages -> Model -> Model
+procMessages messages model =
+    case messages of
+        [] ->
+            model
+
+        message :: rest ->
+            model
+                |> processMessage message
+                |> procMessages rest
+
+
+getScreen : Model -> Screen
+getScreen model =
+    if model.userName == "" then
+        Register
+
+    else
+        Lobby
+
+
+getUsers : Model -> List User
+getUsers model =
+    []
+
+
+processMessage : Messages.Message -> Model -> Model
+processMessage message model =
     model
 
 
@@ -34,41 +68,54 @@ type Msg
 
 init : () -> ( Model, Cmd msg )
 init _ =
-    ( { messages = Just [], screen = Register, users = [], userInputVal = "" }, Cmd.none )
+    ( { messages = []
+      , userInputVal = ""
+      , userName = ""
+      }
+    , Cmd.none
+    )
 
 
 view : Model -> Browser.Document Msg
 view model =
     { title = "Retrospective"
-    , body = body model
+    , body = [ usersView model, screen model ]
     }
 
 
-body : Model -> List (Html Msg)
-body model =
-    case model.screen of
+screen : Model -> Html Msg
+screen model =
+    case getScreen model of
         Register ->
-            [ button [ onClick (Messages Messages.startGame) ] [ text "Start" ]
-            , button [ onClick (Messages Messages.requestMessages) ] [ text "Get Messages" ]
-            , messageView model.messages
-            , Html.form [ Html.Events.onSubmit SubmitUsername ]
-                [ Html.input [ Html.Attributes.type_ "text", Html.Attributes.value model.userInputVal, Html.Events.onInput UserNameInput ] []
-                , Html.input [ Html.Attributes.type_ "button" ] []
+            Html.div []
+                [ messageView model.messages
+                , Html.form [ Html.Events.onSubmit SubmitUsername ]
+                    [ Html.input
+                        [ Html.Attributes.type_ "text"
+                        , Html.Attributes.value model.userInputVal
+                        , Html.Events.onInput UserNameInput
+                        ]
+                        []
+                    , Html.input
+                        [ Html.Attributes.type_ "submit"
+                        , Html.Attributes.value "Submit"
+                        ]
+                        []
+                    ]
                 ]
-            ]
 
         Lobby ->
-            []
+            Html.div [] []
 
 
 usersView : Model -> Html Msg
 usersView model =
-    Html.ul [] (List.map userView model.users)
+    Html.ul [] (List.map userView (getUsers model))
 
 
-userView : String -> Html Msg
+userView : User -> Html Msg
 userView user =
-    Html.li [] [ Html.text user ]
+    Html.li [] [ Html.text user.name ]
 
 
 type Screen
@@ -78,20 +125,19 @@ type Screen
 
 messageView : Messages.Messages -> Html.Html Msg
 messageView messages =
-    case messages of
-        Just messageValues ->
-            Html.ul []
-                (List.map
-                    (\message ->
-                        Html.li []
-                            [ Html.text (message.value ++ " - " ++ String.fromInt (Time.posixToMillis message.time))
-                            ]
-                    )
-                    messageValues
+    Html.div []
+        [ button [ onClick (Messages Messages.requestMessages) ] [ text "Get Messages" ]
+        , Html.ul []
+            (List.map
+                (\message ->
+                    Html.li []
+                        [ Html.text
+                            (Messages.messageTypeToString message.value ++ " - " ++ String.fromInt (Time.posixToMillis message.time))
+                        ]
                 )
-
-        Nothing ->
-            Html.div [] [ Html.text "Error getting messages" ]
+                messages
+            )
+        ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -102,13 +148,27 @@ update msg model =
                 ( m, c ) =
                     Messages.update messagesMsg model.messages
             in
-            ( processMessages { model | messages = m }, Cmd.map (\mess -> Messages mess) c )
+            ( processMessages { model | messages = m }, mapToCmd c )
 
         UserNameInput name ->
             ( { model | userInputVal = name }, Cmd.none )
 
         SubmitUsername ->
-            ( { model | userInputVal = "" }, Messages.addUser model.userInputVal )
+            if model.userInputVal == "" then
+                ( model, Cmd.none )
+
+            else
+                ( { model
+                    | userInputVal = ""
+                    , userName = model.userInputVal
+                  }
+                , Messages.addUser model.userInputVal |> mapToCmd
+                )
+
+
+mapToCmd : Cmd Messages.Msg -> Cmd Msg
+mapToCmd cmd =
+    Cmd.map (\mess -> Messages mess) cmd
 
 
 subscriptions : Model -> Sub Msg

@@ -1,4 +1,4 @@
-module Messages exposing (Message, Messages, Msg, addUser, requestMessages, startGame, update)
+module Messages exposing (Message, Messages, Msg, addUser, messageTypeToString, prepareMessage, requestMessages, update)
 
 import Http
 import Json.Decode
@@ -14,38 +14,56 @@ url =
 type Msg
     = GetMessages
     | GotMessages (Result Http.Error (List Message))
-    | PrepareMessage String
     | SendMessage Message
     | Sent (Result Http.Error ())
 
 
 type alias Messages =
-    Maybe (List Message)
+    List Message
 
 
 type alias Message =
-    { value : String
+    { value : MessageType
     , time : Time.Posix
     }
 
 
-startGame : Msg
-startGame =
-    PrepareMessage "START"
+type MessageType
+    = InvalidMessage
+    | Start
+    | AddUser String
+    | UsersReady
 
 
-addUser : String -> Msg
+messageTypeToString : MessageType -> String
+messageTypeToString messageType =
+    case messageType of
+        InvalidMessage ->
+            "?"
+
+        Start ->
+            "START"
+
+        AddUser user ->
+            "ADD_USER " ++ user
+
+        UsersReady ->
+            "USERS_READY"
+
+
+addUser : String -> Cmd Msg
 addUser userName =
-    PrepareMessage ("USER " ++ userName)
+    AddUser userName |> prepareMessage
 
 
 requestMessages =
     GetMessages
 
 
-prepareMessage : String -> Cmd Msg
+prepareMessage : MessageType -> Cmd Msg
 prepareMessage message =
-    Task.perform SendMessage (Time.now |> Task.andThen (\time -> Task.succeed { value = message, time = time }))
+    Task.perform SendMessage
+        (Time.now |> Task.andThen (\time -> Task.succeed { value = message, time = time }))
 
 
 getMessages : Cmd Msg
@@ -68,7 +86,7 @@ postMessage message =
 encodeMessage : Message -> Json.Encode.Value
 encodeMessage message =
     Json.Encode.object
-        [ ( "value", Json.Encode.string message.value )
+        [ ( "value", messageTypeToString message.value |> Json.Encode.string )
         , ( "time", Json.Encode.int (Time.posixToMillis message.time) )
         ]
 
@@ -80,7 +98,38 @@ decodeMessages =
 
 decodeMessage : Json.Decode.Decoder Message
 decodeMessage =
-    Json.Decode.map2 Message (Json.Decode.field "value" Json.Decode.string) (Json.Decode.field "time" (Json.Decode.map Time.millisToPosix Json.Decode.int))
+    Json.Decode.map2 Message
+        (Json.Decode.field "value" (Json.Decode.map decodeMessageStr Json.Decode.string))
+        (Json.Decode.field "time" (Json.Decode.map Time.millisToPosix Json.Decode.int))
+
+
+decodeMessageStr : String -> MessageType
+decodeMessageStr string =
+    let
+        itemList =
+            String.split " " string
+    in
+    case itemList of
+        [] ->
+            InvalidMessage
+
+        msgType :: values ->
+            if msgType == "START" then
+                Start
+
+            else if msgType == "ADD_USER" then
+                case values of
+                    [] ->
+                        InvalidMessage
+
+                    userName :: stuff ->
+                        AddUser userName
+
+            else if msgType == "USERS_READY" then
+                UsersReady
+
+            else
+                InvalidMessage
 
 
 update : Msg -> Messages -> ( Messages, Cmd Msg )
@@ -89,23 +138,30 @@ update msg messages =
         GetMessages ->
             ( messages, getMessages )
 
-        GotMessages messagesResult ->
-            case messagesResult of
-                Ok messageList ->
+        GotMessages messageList ->
+            case messageList of
+                Ok messageListOk ->
                     let
                         sorted =
-                            List.sortBy (\message -> Time.posixToMillis message.time) messageList
+                            List.sortBy (\message -> Time.posixToMillis message.time) messageListOk
                     in
-                    ( Just sorted, Cmd.none )
+                    ( List.filter isValid sorted, Cmd.none )
 
-                Err err ->
-                    ( Nothing, Cmd.none )
-
-        PrepareMessage message ->
-            ( messages, prepareMessage message )
+                Err _ ->
+                    ( messages, Cmd.none )
 
         SendMessage message ->
-            ( messages, postMessage message )
+            ( messages ++ [ message ], postMessage message )
 
         Sent _ ->
             ( messages, Cmd.none )
+
+
+isValid : Message -> Bool
+isValid message =
+    case message.value of
+        InvalidMessage ->
+            False
+
+        _ ->
+            True
