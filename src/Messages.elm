@@ -2,11 +2,12 @@ module Messages exposing
     ( Message
     , MessageType(..)
     , Messages
-    , Msg
+    , Msg(..)
+    , addNotable
     , addUser
+    , getMessagesTime
     , messageTypeToString
     , prepareMessage
-    , requestMessages
     , start
     , update
     , usersReady
@@ -45,6 +46,12 @@ type MessageType
     | Start
     | AddUser String
     | UsersReady
+    | Notable String String
+
+
+getMessagesTime : Time.Posix -> Msg
+getMessagesTime _ =
+    GetMessages
 
 
 messageTypeToString : MessageType -> String
@@ -62,6 +69,9 @@ messageTypeToString messageType =
         UsersReady ->
             "USERS_READY"
 
+        Notable user notable ->
+            "NOTABLE " ++ user ++ " " ++ notable
+
 
 start : Cmd Msg
 start =
@@ -78,8 +88,9 @@ usersReady =
     prepareMessage UsersReady
 
 
-requestMessages =
-    GetMessages
+addNotable : String -> String -> Cmd Msg
+addNotable userName notable =
+    prepareMessage (Notable userName notable)
 
 
 prepareMessage : MessageType -> Cmd Msg
@@ -144,11 +155,24 @@ decodeMessageStr string =
                     [] ->
                         InvalidMessage
 
-                    userName :: stuff ->
+                    userName :: _ ->
                         AddUser userName
 
             else if msgType == "USERS_READY" then
                 UsersReady
+
+            else if msgType == "NOTABLE" then
+                case values of
+                    [] ->
+                        InvalidMessage
+
+                    userName :: stuff ->
+                        case stuff of
+                            [] ->
+                                InvalidMessage
+
+                            notable :: _ ->
+                                Notable userName notable
 
             else
                 InvalidMessage
