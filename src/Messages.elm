@@ -3,6 +3,8 @@ module Messages exposing
     , MessageType(..)
     , Messages
     , Msg(..)
+    , addGuess
+    , addNextGuess
     , addNotable
     , addUser
     , getMessagesTime
@@ -16,6 +18,7 @@ module Messages exposing
 import Http
 import Json.Decode
 import Json.Encode
+import List.Extra
 import Task
 import Time
 
@@ -47,6 +50,8 @@ type MessageType
     | AddUser String
     | UsersReady
     | Notable String String
+    | Guess String String String
+    | NextGuess
 
 
 getMessagesTime : Time.Posix -> Msg
@@ -64,13 +69,29 @@ messageTypeToString messageType =
             "START"
 
         AddUser user ->
-            "ADD_USER " ++ user
+            "ADD_USER " ++ unSpace user
 
         UsersReady ->
             "USERS_READY"
 
         Notable user notable ->
-            "NOTABLE " ++ user ++ " " ++ notable
+            "NOTABLE " ++ unSpace user ++ " " ++ unSpace notable
+
+        Guess user notable owner ->
+            "GUESS " ++ unSpace user ++ " " ++ unSpace notable ++ " " ++ unSpace owner
+
+        NextGuess ->
+            "NEXT_GUESS"
+
+
+space : String -> String
+space str =
+    String.replace "_" " " str
+
+
+unSpace : String -> String
+unSpace str =
+    String.replace " " "_" str
 
 
 start : Cmd Msg
@@ -91,6 +112,16 @@ usersReady =
 addNotable : String -> String -> Cmd Msg
 addNotable userName notable =
     prepareMessage (Notable userName notable)
+
+
+addGuess : String -> String -> String -> Cmd Msg
+addGuess userName notable owner =
+    prepareMessage (Guess userName notable owner)
+
+
+addNextGuess : Cmd Msg
+addNextGuess =
+    prepareMessage NextGuess
 
 
 prepareMessage : MessageType -> Cmd Msg
@@ -156,7 +187,7 @@ decodeMessageStr string =
                         InvalidMessage
 
                     userName :: _ ->
-                        AddUser userName
+                        AddUser (space userName)
 
             else if msgType == "USERS_READY" then
                 UsersReady
@@ -172,7 +203,28 @@ decodeMessageStr string =
                                 InvalidMessage
 
                             notable :: _ ->
-                                Notable userName notable
+                                Notable (space userName) (space notable)
+
+            else if msgType == "GUESS" then
+                case values of
+                    [] ->
+                        InvalidMessage
+
+                    userName :: stuff ->
+                        case stuff of
+                            [] ->
+                                InvalidMessage
+
+                            notable :: more ->
+                                case more of
+                                    [] ->
+                                        InvalidMessage
+
+                                    owner :: _ ->
+                                        Guess (space userName) (space notable) (space owner)
+
+            else if msgType == "NEXT_GUESS" then
+                NextGuess
 
             else
                 InvalidMessage
@@ -187,20 +239,29 @@ update msg messages =
         GotMessages messageList ->
             case messageList of
                 Ok messageListOk ->
-                    let
-                        sorted =
-                            List.sortBy (\message -> Time.posixToMillis message.time) messageListOk
-                    in
-                    ( List.filter isValid sorted, Cmd.none )
+                    ( (messages ++ messageListOk) |> processMessages, Cmd.none )
 
                 Err _ ->
                     ( messages, Cmd.none )
 
         SendMessage message ->
-            ( messages ++ [ message ], postMessage message )
+            ( (message :: messages) |> processMessages, postMessage message )
 
         Sent _ ->
             ( messages, Cmd.none )
+
+
+processMessages : Messages -> Messages
+processMessages messages =
+    messages
+        |> List.filter isValid
+        |> List.Extra.uniqueBy
+            (\message ->
+                messageTypeToString message.value
+                    ++ String.fromInt (Time.posixToMillis message.time)
+            )
+        |> List.sortBy (\message -> Time.posixToMillis message.time)
+        |> getCurrentMessages
 
 
 isValid : Message -> Bool
@@ -211,3 +272,23 @@ isValid message =
 
         _ ->
             True
+
+
+getCurrentMessages : Messages -> Messages
+getCurrentMessages messages =
+    getCurrentMessagesInner messages messages
+
+
+getCurrentMessagesInner : Messages -> Messages -> Messages
+getCurrentMessagesInner currentMessages unprocessedMessages =
+    case unprocessedMessages of
+        [] ->
+            currentMessages
+
+        message :: rest ->
+            case message.value of
+                Start ->
+                    getCurrentMessagesInner (message :: rest) rest
+
+                _ ->
+                    getCurrentMessagesInner currentMessages rest
