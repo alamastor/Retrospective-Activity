@@ -23,6 +23,7 @@ import Task
 import Time
 
 
+url : String
 url =
     "https://retrospective-17367.firebaseio.com/messages.json"
 

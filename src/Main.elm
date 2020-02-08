@@ -1,6 +1,5 @@
-module Main exposing (..)
+module Main exposing (main)
 
-import Bitwise
 import Browser
 import Dict
 import Html exposing (Html, button, div, text)
@@ -14,10 +13,12 @@ import Set
 import Time
 
 
+admin : String
 admin =
     "Alistair"
 
 
+main : Program () Model Msg
 main =
     Browser.document
         { init = init
@@ -410,13 +411,12 @@ quiz : Model -> List (Html Msg)
 quiz model =
     case nextGuess model of
         Just ( user, notable ) ->
-            [ Html.h1 [] [ text "Quiz" ]
-            ]
-                ++ (if List.length (getGuesses model) <= nextGuessCount model then
+            Html.h1 [] [ text "Quiz" ]
+                :: (if List.length (getGuesses model) <= nextGuessCount model then
                         [ Html.h2 [] [ text (user.name ++ "'s turn to guess!") ]
                         , Html.h3 [] [ text "Who wrote this?" ]
                         , Html.p [] [ text notable.value ]
-                        , guessView model user notable
+                        , guessView model user
                         ]
 
                     else
@@ -470,8 +470,8 @@ guessResultView model user notable =
             Html.div [] []
 
 
-guessView : Model -> User -> Notable -> Html Msg
-guessView model user notable =
+guessView : Model -> User -> Html Msg
+guessView model user =
     if model.userName == user.name then
         let
             radioButtons =
@@ -581,7 +581,7 @@ mapToCmd cmd =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
     Sub.map Messages (Time.every 1000 Messages.getMessagesTime)
 
 
@@ -613,13 +613,6 @@ getGuesses model =
     List.filterMap messageToGuess model.messages
 
 
-guessedNotables : Model -> Set.Set String
-guessedNotables model =
-    getGuesses model
-        |> List.map .notable
-        |> Set.fromList
-
-
 messageToGuess : Messages.Message -> Maybe Guess
 messageToGuess message =
     case message.value of
@@ -646,25 +639,6 @@ guesserList model =
                 (Random.initialSeed 0)
     in
     result
-
-
-guesserListWithNotablesView : Model -> Html Msg
-guesserListWithNotablesView model =
-    Html.ul []
-        (List.map
-            (\( user, notable ) ->
-                Html.li []
-                    [ text
-                        (user.name
-                            ++ " - "
-                            ++ notable.value
-                            ++ " "
-                            ++ notable.owner
-                        )
-                    ]
-            )
-            (guesserListWithNotables model)
-        )
 
 
 guesserListWithNotables : Model -> List ( User, Notable )
@@ -708,11 +682,6 @@ nextGuess model =
 randomNotables : Model -> Random.Seed -> ( List Notable, Random.Seed )
 randomNotables model seed =
     Random.step (Random.List.shuffle (getNotables model)) seed
-
-
-allUsersGuessedOnce : Model -> Bool
-allUsersGuessedOnce model =
-    List.all (\user -> List.length (userGuesses user model) > 0) (getUsers model)
 
 
 allUsersGuessedTwice : Model -> Bool
