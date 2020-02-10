@@ -10,6 +10,7 @@ module Messages exposing
     , getMessagesTime
     , messageTypeToString
     , prepareMessage
+    , removeUser
     , start
     , update
     , usersReady
@@ -49,10 +50,11 @@ type MessageType
     = InvalidMessage
     | Start
     | AddUser String
+    | RemoveUser String
     | UsersReady
     | Notable String String
     | Guess String String String
-    | NextGuess
+    | RoundComplete
 
 
 getMessagesTime : Time.Posix -> Msg
@@ -72,6 +74,9 @@ messageTypeToString messageType =
         AddUser user ->
             "ADD_USER " ++ unSpace user
 
+        RemoveUser user ->
+            "REMOVE_USER " ++ unSpace user
+
         UsersReady ->
             "USERS_READY"
 
@@ -81,8 +86,8 @@ messageTypeToString messageType =
         Guess user notable owner ->
             "GUESS " ++ unSpace user ++ " " ++ unSpace notable ++ " " ++ unSpace owner
 
-        NextGuess ->
-            "NEXT_GUESS"
+        RoundComplete ->
+            "ROUND_COMPLETE"
 
 
 space : String -> String
@@ -105,6 +110,11 @@ addUser userName =
     AddUser userName |> prepareMessage
 
 
+removeUser : String -> Cmd Msg
+removeUser user =
+    RemoveUser user |> prepareMessage
+
+
 usersReady : Cmd Msg
 usersReady =
     prepareMessage UsersReady
@@ -122,7 +132,7 @@ addGuess userName notable owner =
 
 addNextGuess : Cmd Msg
 addNextGuess =
-    prepareMessage NextGuess
+    prepareMessage RoundComplete
 
 
 prepareMessage : MessageType -> Cmd Msg
@@ -190,6 +200,14 @@ decodeMessageStr string =
                     userName :: _ ->
                         AddUser (space userName)
 
+            else if msgType == "REMOVE_USER" then
+                case values of
+                    [] ->
+                        InvalidMessage
+
+                    userName :: _ ->
+                        RemoveUser (space userName)
+
             else if msgType == "USERS_READY" then
                 UsersReady
 
@@ -224,8 +242,8 @@ decodeMessageStr string =
                                     owner :: _ ->
                                         Guess (space userName) (space notable) (space owner)
 
-            else if msgType == "NEXT_GUESS" then
-                NextGuess
+            else if msgType == "ROUND_COMPLETE" then
+                RoundComplete
 
             else
                 InvalidMessage
