@@ -31,7 +31,7 @@ enterNotableInput model =
         ]
 
     else
-        [ Html.div [] [ text "Waiting for others to finish" ] ]
+        [ Html.div [] [ text "Waiting for others to finish..." ] ]
 
 
 selfNotablesView : Model -> Html Msg

@@ -5,6 +5,7 @@ module Model exposing
     , User
     , admin
     , correctGuesser
+    , favoriteGuess
     , getGuesses
     , getNotables
     , getSelf
@@ -179,12 +180,6 @@ toRemovedUserName message =
             Nothing
 
 
-userGuesses : User -> Model -> List Guess
-userGuesses user model =
-    getGuesses model
-        |> List.filter (\guess -> guess.guesser == user.name)
-
-
 getGuesses : Model -> List Guess
 getGuesses model =
     List.filterMap messageToGuess model.messages
@@ -290,36 +285,35 @@ replaceIfSelf model new old =
 
 guessingOver : Notable -> Model -> Bool
 guessingOver notable model =
-    correctlyGuessed notable model || everyoneGuessed notable model
+    everyoneGuessed notable model
 
 
 everyoneGuessed : Notable -> Model -> Bool
 everyoneGuessed notable model =
     let
         guesserNames =
-            Debug.log "guesserName"
-                (model
-                    |> notableGuesses notable
-                    |> Debug.log "notableGuesses"
-                    |> List.map (\guess -> guess.guesser)
-                    |> Set.fromList
-                    |> Set.insert notable.owner
-                )
+            model
+                |> notableGuesses notable
+                |> List.map (\guess -> guess.guesser)
+                |> Set.fromList
+                |> Set.insert notable.owner
 
         userNames =
-            Debug.log "userNames"
-                (model
-                    |> getUsers
-                    |> List.map (\user -> user.name)
-                    |> Set.fromList
-                )
+            model
+                |> getUsers
+                |> List.map (\user -> user.name)
+                |> Set.fromList
     in
     guesserNames == userNames
 
 
-correctlyGuessed : Notable -> Model -> Bool
-correctlyGuessed notable model =
-    List.any (guessCorrect model) (notableGuesses notable model)
+favoriteGuess : Notable -> Model -> Maybe { count : Int, notable : Notable, guess : String }
+favoriteGuess notable model =
+    model
+        |> notableGuesses notable
+        |> List.Extra.gatherEqualsBy .guess
+        |> List.Extra.maximumBy (\( _, gl ) -> List.length gl)
+        |> Maybe.map (\( g, gl ) -> { count = List.length gl, notable = notable, guess = g.guess })
 
 
 correctGuesser : Notable -> Model -> Maybe String

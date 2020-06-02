@@ -15,7 +15,7 @@ quizView model =
             Html.h1 [] [ text "Quiz" ]
                 :: (if completedNotableCount model <= Model.roundCompleteCount model then
                         if userGuessedNotable notable model then
-                            [ guessResultView model notable ]
+                            [ waitingForOthersToGuessView ]
 
                         else
                             [ Html.h2 [] [ text "Who wrote this?" ]
@@ -79,55 +79,30 @@ completedNotableCount : Model -> Int
 completedNotableCount model =
     model
         |> Model.getNotables
-        |> Debug.log "notables"
         |> List.Extra.count (\notable -> Model.guessingOver notable model)
-        |> Debug.log "completedNotableCount"
 
 
 guessingOverView : Notable -> Model -> Html Msg
 guessingOverView notable model =
-    case Model.correctGuesser notable model of
-        Just guesser ->
-            Html.h2 []
-                [ text
-                    (guesser
-                        ++ " correctly guessed that\""
-                        ++ notable.value
-                        ++ "\" belongs to "
-                        ++ notable.owner
-                        ++ "!"
-                    )
-                ]
-
-        Nothing ->
-            Html.h2 []
-                [ text
-                    ("No one guessed that \""
-                        ++ notable.value
-                        ++ "\" belongs to "
-                        ++ notable.owner
-                        ++ "."
-                    )
-                ]
-
-
-guessResultView : Model -> Notable -> Html Msg
-guessResultView model notable =
     let
-        lastGuess =
-            List.Extra.last (Model.getGuesses model)
+        outcomeText =
+            case Model.favoriteGuess notable model of
+                Just favoriteGuess ->
+                    "Most people guessed that \""
+                        ++ notable.value
+                        ++ "\" belongs to "
+                        ++ favoriteGuess.guess
+
+                Nothing ->
+                    "No guesses"
     in
-    case lastGuess of
-        Just guess ->
-            if guess.guess == notable.owner then
-                Html.div []
-                    [ Html.h2 [] [ text "Correct!" ]
-                    ]
+    Html.h2 []
+        [ text outcomeText
+        ]
 
-            else
-                Html.div []
-                    [ Html.h2 [] [ text "Incorrect!" ]
-                    ]
 
-        Nothing ->
-            Html.div [] []
+waitingForOthersToGuessView : Html Msg
+waitingForOthersToGuessView =
+    Html.div []
+        [ Html.h2 [] [ text "Waiting for every to finish guessing..." ]
+        ]
